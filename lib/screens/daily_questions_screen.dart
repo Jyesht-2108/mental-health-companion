@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mental_health_companion/providers/voice_provider.dart';
 import 'package:mental_health_companion/providers/app_state_provider.dart';
 import 'package:mental_health_companion/providers/brain_visualization_provider.dart';
@@ -315,7 +316,7 @@ class _DailyQuestionsScreenState extends State<DailyQuestionsScreen> {
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.of(context).pop();
+                context.go('/home');
               },
               icon: const Icon(Icons.home),
               label: const Text('Return Home'),

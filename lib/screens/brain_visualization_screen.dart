@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:math' as math;
 import 'package:mental_health_companion/providers/brain_visualization_provider.dart';
 
 class BrainVisualizationScreen extends StatefulWidget {
@@ -9,7 +10,25 @@ class BrainVisualizationScreen extends StatefulWidget {
   State<BrainVisualizationScreen> createState() => _BrainVisualizationScreenState();
 }
 
-class _BrainVisualizationScreenState extends State<BrainVisualizationScreen> {
+class _BrainVisualizationScreenState extends State<BrainVisualizationScreen> 
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,37 +109,41 @@ class _BrainVisualizationScreenState extends State<BrainVisualizationScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.purple[100]!,
-              Colors.blue[100]!,
+              Colors.purple[50]!,
+              Colors.blue[50]!,
             ],
           ),
         ),
-        child: Stack(
-          children: [
-            // Placeholder for 3D brain model
-            // In production, this would use flutter_gl or similar for 3D rendering
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.psychology,
-                    size: 120,
-                    color: _getOverallActivityColor(provider),
-                  ),
-                  if (provider.isAnimating)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 16),
-                      child: CircularProgressIndicator(),
-                    ),
-                ],
+        child: AnimatedBuilder(
+          animation: _animationController,
+          builder: (context, child) {
+            return CustomPaint(
+              painter: BrainPainter(
+                provider.regionActivity, 
+                provider.isAnimating,
+                _animationController.value,
               ),
+              child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (provider.isAnimating)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: CircularProgressIndicator(),
+                  ),
+                Text(
+                  'Neural Activity',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: _getOverallActivityColor(provider),
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
             ),
-            // Overlay activity indicators
-            ...provider.regionActivity.entries.map((entry) {
-              return _buildRegionIndicator(entry.key, entry.value);
-            }),
-          ],
+              ),
+            );
+          },
         ),
       ),
     );
@@ -139,28 +162,6 @@ class _BrainVisualizationScreenState extends State<BrainVisualizationScreen> {
     return Colors.green;
   }
 
-  Widget _buildRegionIndicator(String region, double intensity) {
-    // Simplified region indicators
-    // In production, these would be positioned on the 3D model
-    return Positioned(
-      left: 50 + (region.hashCode % 200).toDouble(),
-      top: 50 + ((region.hashCode ~/ 10) % 200).toDouble(),
-      child: Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: _getIntensityColor(intensity).withValues(alpha: 0.7),
-          boxShadow: [
-            BoxShadow(
-              color: _getIntensityColor(intensity),
-              blurRadius: intensity * 10,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Color _getIntensityColor(double intensity) {
     if (intensity > 0.7) return Colors.red;
@@ -352,6 +353,162 @@ class _BrainVisualizationScreenState extends State<BrainVisualizationScreen> {
         ),
       ),
     );
+  }
+}
+
+// Custom painter for brain visualization
+class BrainPainter extends CustomPainter {
+  final Map<String, double> regionActivity;
+  final bool isAnimating;
+  final double animationValue;
+
+  BrainPainter(this.regionActivity, this.isAnimating, [this.animationValue = 0.0]);
+
+  Color _getIntensityColor(double intensity) {
+    if (intensity > 0.7) return Colors.red;
+    if (intensity > 0.4) return Colors.orange;
+    return Colors.green;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final brainWidth = size.width * 0.7;
+    final brainHeight = size.height * 0.7;
+
+    // Draw brain outline (simplified brain shape)
+    final brainPath = Path();
+    brainPath.addOval(Rect.fromCenter(
+      center: center,
+      width: brainWidth,
+      height: brainHeight,
+    ));
+
+    // Draw base brain color
+    final basePaint = Paint()
+      ..color = Colors.grey[300]!
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(brainPath, basePaint);
+
+    // Draw brain outline
+    final outlinePaint = Paint()
+      ..color = Colors.grey[600]!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(brainPath, outlinePaint);
+
+    // Draw brain regions with activity
+    if (regionActivity.isNotEmpty) {
+      final regionPositions = {
+        'prefrontal_cortex': Offset(center.dx, center.dy - brainHeight * 0.2),
+        'amygdala': Offset(center.dx - brainWidth * 0.15, center.dy),
+        'hippocampus': Offset(center.dx + brainWidth * 0.15, center.dy),
+        'anterior_cingulate': Offset(center.dx, center.dy - brainHeight * 0.05),
+        'insula': Offset(center.dx - brainWidth * 0.1, center.dy + brainHeight * 0.1),
+      };
+
+      regionActivity.forEach((region, intensity) {
+        final position = regionPositions[region] ?? center;
+        final radius = 20 + (intensity * 30);
+        final color = _getIntensityColor(intensity);
+
+        // Draw pulsing effect if animating
+        final pulseRadius = isAnimating
+            ? radius + (math.sin(animationValue * math.pi * 2) * 5).abs()
+            : radius;
+
+        // Draw glow effect
+        final glowPaint = Paint()
+          ..color = color.withValues(alpha: intensity * 0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+        canvas.drawCircle(position, pulseRadius + 10, glowPaint);
+
+        // Draw region circle
+        final regionPaint = Paint()
+          ..color = color.withValues(alpha: 0.8)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(position, pulseRadius, regionPaint);
+
+        // Draw border
+        final borderPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+        canvas.drawCircle(position, pulseRadius, borderPaint);
+
+        // Draw intensity indicator lines
+        if (intensity > 0.3) {
+          final linePaint = Paint()
+            ..color = color
+            ..strokeWidth = 1.5
+            ..style = PaintingStyle.stroke;
+          
+          for (int i = 0; i < 8; i++) {
+            final angle = (i * math.pi * 2) / 8;
+            final startRadius = pulseRadius + 5;
+            final endRadius = startRadius + (intensity * 15);
+            final startX = position.dx + math.cos(angle) * startRadius;
+            final startY = position.dy + math.sin(angle) * startRadius;
+            final endX = position.dx + math.cos(angle) * endRadius;
+            final endY = position.dy + math.sin(angle) * endRadius;
+            
+            canvas.drawLine(
+              Offset(startX, startY),
+              Offset(endX, endY),
+              linePaint,
+            );
+          }
+        }
+      });
+    }
+
+    // Draw neural connections between active regions
+    if (regionActivity.length > 1 && regionActivity.values.any((v) => v > 0.3)) {
+      final activeRegions = regionActivity.entries
+          .where((e) => e.value > 0.3)
+          .toList();
+      
+      for (int i = 0; i < activeRegions.length - 1; i++) {
+        for (int j = i + 1; j < activeRegions.length; j++) {
+          final region1 = activeRegions[i];
+          final region2 = activeRegions[j];
+          
+          final pos1 = _getRegionPosition(region1.key, center, brainWidth, brainHeight);
+          final pos2 = _getRegionPosition(region2.key, center, brainWidth, brainHeight);
+          
+          final connectionPaint = Paint()
+            ..color = Colors.blue.withValues(alpha: 0.2)
+            ..strokeWidth = 1
+            ..style = PaintingStyle.stroke;
+          
+          canvas.drawLine(pos1, pos2, connectionPaint);
+        }
+      }
+    }
+  }
+
+  Offset _getRegionPosition(String region, Offset center, double width, double height) {
+    switch (region) {
+      case 'prefrontal_cortex':
+        return Offset(center.dx, center.dy - height * 0.2);
+      case 'amygdala':
+        return Offset(center.dx - width * 0.15, center.dy);
+      case 'hippocampus':
+        return Offset(center.dx + width * 0.15, center.dy);
+      case 'anterior_cingulate':
+        return Offset(center.dx, center.dy - height * 0.05);
+      case 'insula':
+        return Offset(center.dx - width * 0.1, center.dy + height * 0.1);
+      default:
+        return center;
+    }
+  }
+
+  @override
+  bool shouldRepaint(BrainPainter oldDelegate) {
+    return oldDelegate.regionActivity != regionActivity ||
+        oldDelegate.isAnimating != isAnimating ||
+        oldDelegate.animationValue != animationValue;
   }
 }
 

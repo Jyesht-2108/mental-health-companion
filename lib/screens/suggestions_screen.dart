@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mental_health_companion/providers/brain_visualization_provider.dart';
 import 'package:mental_health_companion/services/therapy_suggestion_service.dart';
 import 'package:mental_health_companion/models/therapy_activity.dart';
@@ -311,12 +312,12 @@ class _SuggestionsScreenState extends State<SuggestionsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
             child: const Text('Close'),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
+              context.pop();
               // Start activity
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
