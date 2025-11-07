@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import 'package:mental_health_companion/services/speech_service.dart';
 import 'package:mental_health_companion/services/emotion_analysis_service.dart';
 
@@ -31,32 +33,75 @@ class VoiceProvider extends ChangeNotifier {
   }
 
   Future<bool> _requestPermissions() async {
-    final micStatus = await Permission.microphone.request();
-    final storageStatus = await Permission.storage.request();
-    return micStatus.isGranted && storageStatus.isGranted;
+    try {
+      // Request microphone permission
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        debugPrint('Microphone permission denied');
+        return false;
+      }
+
+      // For Android 11+, we don't need storage permission for app-specific directories
+      // Only request if needed for external storage
+      if (await Permission.storage.isDenied) {
+        final storageStatus = await Permission.storage.request();
+        if (!storageStatus.isGranted) {
+          debugPrint('Storage permission denied, but continuing...');
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+      return false;
+    }
   }
 
   Future<void> startRecording() async {
-    if (!_hasPermission) {
-      await initialize();
-      if (!_hasPermission) return;
-    }
-
     try {
-      if (await _recorder.hasPermission()) {
-        _isRecording = true;
-        _transcribedText = '';
-        final path = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        await _recorder.start(
-          const RecordConfig(),
-          path: path,
-        );
-        _audioPath = path;
-        notifyListeners();
+      // Request permissions if not already granted
+      if (!_hasPermission) {
+        await initialize();
+        if (!_hasPermission) {
+          debugPrint('Permission not granted, cannot start recording');
+          return;
+        }
       }
-    } catch (e) {
+
+      // Double-check recorder permission
+      if (!await _recorder.hasPermission()) {
+        debugPrint('Recorder permission check failed');
+        _hasPermission = false;
+        await initialize();
+        if (!_hasPermission) {
+          return;
+        }
+      }
+
+      // Get app documents directory for saving audio
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final filePath = path.join(directory.path, fileName);
+
+      _isRecording = true;
+      _transcribedText = '';
+      _audioPath = null;
+      notifyListeners();
+
+      // Start recording with proper path
+      await _recorder.start(
+        const RecordConfig(),
+        path: filePath,
+      );
+      
+      _audioPath = filePath;
+      notifyListeners();
+      debugPrint('Recording started: $filePath');
+    } catch (e, stackTrace) {
       debugPrint('Error starting recording: $e');
+      debugPrint('Stack trace: $stackTrace');
       _isRecording = false;
+      _audioPath = null;
       notifyListeners();
     }
   }

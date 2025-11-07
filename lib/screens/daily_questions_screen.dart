@@ -144,7 +144,30 @@ class _DailyQuestionsScreenState extends State<DailyQuestionsScreen> {
               IconButton(
                 icon: const Icon(Icons.mic, size: 64),
                 color: Colors.red,
-                onPressed: voiceProvider.startRecording,
+                onPressed: () async {
+                  try {
+                    await voiceProvider.startRecording();
+                    if (!voiceProvider.isRecording && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please grant microphone permission to record audio'),
+                          backgroundColor: Colors.orange,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to start recording. Please check permissions in Settings.'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  }
+                },
               ),
             const SizedBox(height: 16),
             if (voiceProvider.isRecording)
