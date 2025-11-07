@@ -46,8 +46,16 @@ class _BrainVisualizationScreenState extends State<BrainVisualizationScreen>
       ),
       body: Consumer<BrainVisualizationProvider>(
         builder: (context, provider, child) {
-          if (provider.currentActivity == null) {
+          // Show empty state only if there's no activity data at all
+          if (provider.currentActivity == null && provider.regionActivity.isEmpty) {
             return _buildEmptyState();
+          }
+
+          // Start animation if there's activity
+          if (provider.regionActivity.isNotEmpty && !provider.isAnimating) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              provider.startAnimation();
+            });
           }
 
           return SingleChildScrollView(
@@ -373,80 +381,121 @@ class BrainPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final brainWidth = size.width * 0.7;
-    final brainHeight = size.height * 0.7;
+    final brainWidth = size.width * 0.75;
+    final brainHeight = size.height * 0.75;
 
-    // Draw brain outline (simplified brain shape)
-    final brainPath = Path();
-    brainPath.addOval(Rect.fromCenter(
-      center: center,
-      width: brainWidth,
-      height: brainHeight,
-    ));
+    // Draw realistic brain shape (more detailed than oval)
+    final brainPath = _createBrainShape(center, brainWidth, brainHeight);
 
-    // Draw base brain color
+    // Draw 3D effect with gradient
+    final brainGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Colors.purple[200]!,
+        Colors.blue[200]!,
+        Colors.purple[300]!,
+      ],
+    );
+    
     final basePaint = Paint()
-      ..color = Colors.grey[300]!
+      ..shader = brainGradient.createShader(
+        Rect.fromCenter(center: center, width: brainWidth, height: brainHeight),
+      )
       ..style = PaintingStyle.fill;
     canvas.drawPath(brainPath, basePaint);
 
-    // Draw brain outline
-    final outlinePaint = Paint()
-      ..color = Colors.grey[600]!
+    // Draw brain outline with shadow effect
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.2)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 3;
+    canvas.drawPath(brainPath, shadowPaint);
+
+    final outlinePaint = Paint()
+      ..color = Colors.grey[800]!
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
     canvas.drawPath(brainPath, outlinePaint);
+
+    // Draw brain texture (sulci/gyri lines)
+    _drawBrainTexture(canvas, brainPath, center, brainWidth, brainHeight);
 
     // Draw brain regions with activity
     if (regionActivity.isNotEmpty) {
       final regionPositions = {
-        'prefrontal_cortex': Offset(center.dx, center.dy - brainHeight * 0.2),
-        'amygdala': Offset(center.dx - brainWidth * 0.15, center.dy),
-        'hippocampus': Offset(center.dx + brainWidth * 0.15, center.dy),
-        'anterior_cingulate': Offset(center.dx, center.dy - brainHeight * 0.05),
-        'insula': Offset(center.dx - brainWidth * 0.1, center.dy + brainHeight * 0.1),
+        'prefrontal_cortex': Offset(center.dx, center.dy - brainHeight * 0.25),
+        'amygdala': Offset(center.dx - brainWidth * 0.2, center.dy + brainHeight * 0.05),
+        'hippocampus': Offset(center.dx + brainWidth * 0.2, center.dy + brainHeight * 0.05),
+        'anterior_cingulate': Offset(center.dx, center.dy - brainHeight * 0.08),
+        'insula': Offset(center.dx - brainWidth * 0.12, center.dy + brainHeight * 0.15),
       };
 
       regionActivity.forEach((region, intensity) {
         final position = regionPositions[region] ?? center;
-        final radius = 20 + (intensity * 30);
+        const baseRadius = 25.0;
+        final radius = baseRadius + (intensity * 40);
         final color = _getIntensityColor(intensity);
 
         // Draw pulsing effect if animating
         final pulseRadius = isAnimating
-            ? radius + (math.sin(animationValue * math.pi * 2) * 5).abs()
+            ? radius + (math.sin(animationValue * math.pi * 2) * 8).abs()
             : radius;
 
-        // Draw glow effect
-        final glowPaint = Paint()
-          ..color = color.withValues(alpha: intensity * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-        canvas.drawCircle(position, pulseRadius + 10, glowPaint);
+        // Draw multiple glow layers for better visibility
+        for (int i = 3; i > 0; i--) {
+          final glowPaint = Paint()
+            ..color = color.withValues(alpha: intensity * 0.2 / i)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, 10.0 * i);
+          canvas.drawCircle(position, pulseRadius + (i * 8), glowPaint);
+        }
 
-        // Draw region circle
+        // Draw region circle with gradient for 3D effect
+        final regionGradient = RadialGradient(
+          colors: [
+            color,
+            color.withValues(alpha: 0.6),
+            color.withValues(alpha: 0.3),
+          ],
+        );
+        
         final regionPaint = Paint()
-          ..color = color.withValues(alpha: 0.8)
+          ..shader = regionGradient.createShader(
+            Rect.fromCircle(center: position, radius: pulseRadius),
+          )
           ..style = PaintingStyle.fill;
         canvas.drawCircle(position, pulseRadius, regionPaint);
 
-        // Draw border
+        // Draw border with highlight
         final borderPaint = Paint()
           ..color = color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
+          ..strokeWidth = 3;
         canvas.drawCircle(position, pulseRadius, borderPaint);
 
-        // Draw intensity indicator lines
-        if (intensity > 0.3) {
+        // Draw highlight for 3D effect
+        final highlightPaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.4)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(
+          Offset(position.dx - pulseRadius * 0.3, position.dy - pulseRadius * 0.3),
+          pulseRadius * 0.3,
+          highlightPaint,
+        );
+
+        // Draw intensity indicator lines (more visible)
+        if (intensity > 0.2) {
+          final lineCount = (intensity * 12).round();
           final linePaint = Paint()
             ..color = color
-            ..strokeWidth = 1.5
+            ..strokeWidth = 2.0
             ..style = PaintingStyle.stroke;
           
-          for (int i = 0; i < 8; i++) {
-            final angle = (i * math.pi * 2) / 8;
-            final startRadius = pulseRadius + 5;
-            final endRadius = startRadius + (intensity * 15);
+          for (int i = 0; i < lineCount; i++) {
+            final angle = (i * math.pi * 2) / lineCount;
+            final startRadius = pulseRadius + 8;
+            final endRadius = startRadius + (intensity * 20);
             final startX = position.dx + math.cos(angle) * startRadius;
             final startY = position.dy + math.sin(angle) * startRadius;
             final endX = position.dx + math.cos(angle) * endRadius;
@@ -459,6 +508,24 @@ class BrainPainter extends CustomPainter {
             );
           }
         }
+
+        // Draw region label
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: _getRegionLabel(region),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(
+          canvas,
+          Offset(position.dx - textPainter.width / 2, position.dy + pulseRadius + 5),
+        );
       });
     }
 
@@ -487,18 +554,105 @@ class BrainPainter extends CustomPainter {
     }
   }
 
+  Path _createBrainShape(Offset center, double width, double height) {
+    final path = Path();
+    final left = center.dx - width / 2;
+    final top = center.dy - height / 2;
+    final right = center.dx + width / 2;
+    final bottom = center.dy + height / 2;
+
+    // Create a more realistic brain shape (two hemispheres)
+    path.moveTo(center.dx, top);
+    
+    // Left hemisphere
+    path.cubicTo(
+      left + width * 0.1, top + height * 0.1,
+      left + width * 0.05, center.dy - height * 0.1,
+      left + width * 0.15, center.dy,
+    );
+    path.cubicTo(
+      left + width * 0.1, center.dy + height * 0.2,
+      left + width * 0.2, bottom - height * 0.1,
+      center.dx - width * 0.05, bottom,
+    );
+    
+    // Bottom curve
+    path.cubicTo(
+      center.dx - width * 0.02, bottom + height * 0.05,
+      center.dx + width * 0.02, bottom + height * 0.05,
+      center.dx + width * 0.05, bottom,
+    );
+    
+    // Right hemisphere
+    path.cubicTo(
+      right - width * 0.2, bottom - height * 0.1,
+      right - width * 0.1, center.dy + height * 0.2,
+      right - width * 0.15, center.dy,
+    );
+    path.cubicTo(
+      right - width * 0.05, center.dy - height * 0.1,
+      right - width * 0.1, top + height * 0.1,
+      center.dx, top,
+    );
+    
+    path.close();
+    return path;
+  }
+
+  void _drawBrainTexture(Canvas canvas, Path brainPath, Offset center, double width, double height) {
+    final texturePaint = Paint()
+      ..color = Colors.grey[700]!.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    // Draw sulci (grooves) lines
+    for (int i = 0; i < 8; i++) {
+      final y = center.dy - height * 0.3 + (i * height * 0.6 / 8);
+      final startX = center.dx - width * 0.3;
+      final endX = center.dx + width * 0.3;
+      
+      final path = Path();
+      path.moveTo(startX, y);
+      
+      // Wavy line for texture
+      for (double x = startX; x < endX; x += 10) {
+        final wave = math.sin((x - startX) / 20) * 3;
+        path.lineTo(x, y + wave);
+      }
+      
+      canvas.drawPath(path, texturePaint);
+    }
+  }
+
+  String _getRegionLabel(String region) {
+    switch (region) {
+      case 'prefrontal_cortex':
+        return 'PFC';
+      case 'amygdala':
+        return 'AMY';
+      case 'hippocampus':
+        return 'HIP';
+      case 'anterior_cingulate':
+        return 'ACC';
+      case 'insula':
+        return 'INS';
+      default:
+        return region.toUpperCase();
+    }
+  }
+
   Offset _getRegionPosition(String region, Offset center, double width, double height) {
     switch (region) {
       case 'prefrontal_cortex':
-        return Offset(center.dx, center.dy - height * 0.2);
+        return Offset(center.dx, center.dy - height * 0.25);
       case 'amygdala':
-        return Offset(center.dx - width * 0.15, center.dy);
+        return Offset(center.dx - width * 0.2, center.dy + height * 0.05);
       case 'hippocampus':
-        return Offset(center.dx + width * 0.15, center.dy);
+        return Offset(center.dx + width * 0.2, center.dy + height * 0.05);
       case 'anterior_cingulate':
-        return Offset(center.dx, center.dy - height * 0.05);
+        return Offset(center.dx, center.dy - height * 0.08);
       case 'insula':
-        return Offset(center.dx - width * 0.1, center.dy + height * 0.1);
+        return Offset(center.dx - width * 0.12, center.dy + height * 0.15);
       default:
         return center;
     }
