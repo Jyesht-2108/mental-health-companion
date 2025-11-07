@@ -1,0 +1,67 @@
+name: mental_health_companion
+description: A mobile app that engages users with daily voice questions, analyzes emotional states, and provides conversational therapy support.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Navigation
+  cupertino_icons: ^1.0.6
+  go_router: ^12.1.1
+  
+  # Speech & Audio
+  speech_to_text: ^7.0.0
+  record: ^5.0.4
+  permission_handler: ^11.1.0
+  flutter_tts: ^4.0.2
+  
+  # HTTP & API
+  http: ^1.1.2
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # 3D Graphics (for future 3D brain visualization)
+  # flutter_gl: ^0.0.6
+  # vector_math: ^2.1.4
+  
+  # Data Storage
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+  path: ^1.9.0
+  
+  # Firebase (optional backend)
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_storage: ^11.5.6
+  
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.2.1
+  json_annotation: ^4.8.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  build_runner: ^2.4.7
+  json_serializable: ^6.7.1
+
+dependency_overrides:
+  record_linux: ^1.2.1
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/models/
+    - assets/images/
+    - assets/sounds/
+
